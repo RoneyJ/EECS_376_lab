@@ -16,7 +16,7 @@ nav_msgs::Odometry g_odom; //odom is not actually used in this code, but could b
 
 //some "magic" (tunable) numbers
 //define a radius within which we want to be near to a wall on the left
-const double WALL_FOLLOW_RADIUS = 0.35;
+const double WALL_FOLLOW_RADIUS = 1.0;
 const double RADIUS_LEFT_TURN = 0.3;
 //some timing constants
 const double SPEED = 0.3; //0.3; // m/s speed command
@@ -80,8 +80,9 @@ void laserCallback(const sensor_msgs::LaserScan& laser_scan) {
         g_range_max = laser_scan.range_max;
         // what is the index of the ping that is straight ahead?
         g_index_front = (int) ((0.0 - g_angle_min) / g_angle_increment);
-        g_index_left = (int) ((M_PI / 2.0 - g_angle_min) / g_angle_increment);
-        g_index_right = (int) ((-M_PI / 2.0 - g_angle_min) / g_angle_increment);
+	//leftmost and rightmost pings
+        g_index_left = laser_scan.ranges.size() - 1;  //ranges.size() - 1 (int) ((M_PI / 2.0 - g_angle_min) / g_angle_increment); 
+        g_index_right = 0; //0 (int) ((-M_PI / 2.0 - g_angle_min) / g_angle_increment);
         //arbitrarily choose to also look at ping xx rad CW from 90deg left
         // use this for tangent approx
         g_index_tangent_left = g_index_left - (int) (DANG_TANGENT_APPROX / g_angle_increment);
@@ -98,18 +99,21 @@ void laserCallback(const sensor_msgs::LaserScan& laser_scan) {
     g_radius_tan_test = laser_scan.ranges[g_index_tangent_left];
     g_clearance_tan_test = g_radius_tan_test * cos(DANG_TANGENT_APPROX);
     //search for min ping dist:
-    g_radius_min = g_radius_left;
+    g_radius_min = 4;
     float r_test;
     g_index_min_dist_ping = g_index_left;
     for (int i = g_index_left; i >= g_index_right; i--) {
         r_test = laser_scan.ranges[i];
-        //ROS_INFO("i, r_test = %d,  %f",i,r_test);
-        if (r_test <= g_radius_min) {
+        //ROS_INFO("i, r_test = %d,  %f",i,r_test);		
+        if (r_test <= g_radius_min && r_test != NAN) {
             g_radius_min = r_test;
             g_index_min_dist_ping = i;
         }
     }
     ROS_INFO("min ping dist = %f at index %d", g_radius_min, g_index_min_dist_ping);
+    ROS_INFO("left_index = %d", g_index_left);
+    ROS_INFO("right_index = %d", g_index_right);
+    ROS_INFO("range size = %d", laser_scan.ranges.size());
 }
 
 //node to send Twist commands to the Simple 2-Dimensional Robot Simulator via cmd_vel
@@ -117,9 +121,9 @@ void laserCallback(const sensor_msgs::LaserScan& laser_scan) {
 int main(int argc, char **argv) {
     ros::init(argc, argv, "commander");
     ros::NodeHandle n; // two lines to create a publisher object that can talk to ROS
-    ros::Publisher twist_commander = n.advertise<geometry_msgs::Twist>("/robot0/cmd_vel", 1);
-    ros::Subscriber lidar_subscriber = n.subscribe("robot0/laser_0", 1, laserCallback);
-    ros::Subscriber odom_subscriber = n.subscribe("robot0/odom", 1, odomCallback);
+    ros::Publisher twist_commander = n.advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 1);
+    ros::Subscriber lidar_subscriber = n.subscribe("/scan", 1, laserCallback);
+    ros::Subscriber odom_subscriber = n.subscribe("/odom", 1, odomCallback);
 
     geometry_msgs::Twist twist_cmd; //this is the message type required to send twist commands to STDR 
     // start with all zeros in the command message; should be the case by default, but just to be safe..
@@ -161,6 +165,13 @@ int main(int argc, char **argv) {
         ros::spinOnce();
         loop_timer.sleep();
     }
+/*
+    twist_cmd.linear.x = 0.0; 
+    twist_cmd.angular.z = 0.0;
+    twist_commander.publish(twist_cmd);
+    ros::spinOnce();
+    loop_timer.sleep();
+*/
 
     //OK...ready to start
     ROS_INFO("starting wall following algorithm");
@@ -171,6 +182,7 @@ int main(int argc, char **argv) {
         if ((g_radius_min < WALL_FOLLOW_RADIUS) && (g_index_min_dist_ping < g_index_tangent_left)) {
             //if here, then there is a ping closer than left wall; rotate to make this min-dist ping on left
             twist_cmd.linear.x = 0; //halt
+            twist_cmd.angular.z = 0; //halt
             twist_commander.publish(twist_cmd);
             ROS_WARN("barrier ahead; need to spin");
             ROS_WARN("min ping dist = %f at index %d", g_radius_min, g_index_min_dist_ping);
@@ -179,9 +191,10 @@ int main(int argc, char **argv) {
             ROS_INFO("rotate dtheta = %f", dtheta);
             twist_cmd.angular.z = -YAW_RATE;
             twist_commander.publish(twist_cmd);
-            double dt = fabs(dtheta / YAW_RATE) - 0.15;
+            double dt = fabs(dtheta / YAW_RATE);
             ROS_INFO("spin for dt = %f", dt);
-            ros::Duration(dt).sleep();
+	    
+	    ros::Duration(dt).sleep();
             g_radius_min = -1.0;  //make sure we have a fresh update from lidar callback; crude trick
             while (g_radius_min < 0) { //val will change after a callback
                 ros::spinOnce();
@@ -197,6 +210,7 @@ int main(int argc, char **argv) {
         //should have clearance on left, as well as slightly forward from there, on left
         ROS_INFO("tangent test clearance = %f", g_clearance_tan_test);
         twist_cmd.linear.x = SPEED;
+	twist_cmd.angular.z = 0.0;
         ROS_INFO("clearance to left, and clearance ahead left: %f, %f", g_radius_left, g_clearance_tan_test);
         twist_commander.publish(twist_cmd);
         while ((g_clearance_tan_test < TAN_THRESHOLD) && (g_index_min_dist_ping >= g_index_tangent_left)) {
@@ -221,8 +235,10 @@ int main(int argc, char **argv) {
 
             while (g_clearance_tan_test > TAN_THRESHOLD) {
                 ROS_WARN("trying to reconnect to wall w/ circular trajectory");
+		ROS_INFO("clearance to left, and clearance ahead left and tangent threshold: %f, %f, %f", g_radius_left, g_clearance_tan_test, TAN_THRESHOLD);
                 ros::spinOnce();
                 loop_timer.sleep();
+		
             }
             ROS_INFO("reconnected to wall on left");
             ROS_INFO("clearance to left, and clearance ahead left: %f, %f", g_radius_left, g_clearance_tan_test);
