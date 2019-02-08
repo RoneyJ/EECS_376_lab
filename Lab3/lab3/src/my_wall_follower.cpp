@@ -16,7 +16,7 @@ nav_msgs::Odometry g_odom; //odom is not actually used in this code, but could b
 
 //some "magic" (tunable) numbers
 //define a radius within which we want to be near to a wall on the left
-const double WALL_FOLLOW_RADIUS = 1.0;
+const double WALL_FOLLOW_RADIUS = 0.6;
 const double RADIUS_LEFT_TURN = 0.3;
 //some timing constants
 const double SPEED = 0.3; //0.3; // m/s speed command
@@ -63,7 +63,6 @@ void odomCallback(const nav_msgs::Odometry& odom_msg) {
     double quat_z = odom_msg.pose.pose.orientation.z;
     double quat_w = odom_msg.pose.pose.orientation.w;
     g_phi = 2.0 * atan2(quat_z, quat_w); // cheap conversion from quaternion to heading for planar motion
-    ROS_INFO("g_phi = %f", g_phi);
 }
 
 //callback function to interpret lidar pings;
@@ -80,7 +79,8 @@ void laserCallback(const sensor_msgs::LaserScan& laser_scan) {
         g_range_max = laser_scan.range_max;
         // what is the index of the ping that is straight ahead?
         g_index_front = (int) ((0.0 - g_angle_min) / g_angle_increment);
-	//leftmost and rightmost pings
+	//leftmost and rightmost pingsDelta compression using up to 8 threads.
+
         g_index_left = laser_scan.ranges.size() - 1;  //ranges.size() - 1 (int) ((M_PI / 2.0 - g_angle_min) / g_angle_increment); 
         g_index_right = 0; //0 (int) ((-M_PI / 2.0 - g_angle_min) / g_angle_increment);
         //arbitrarily choose to also look at ping xx rad CW from 90deg left
@@ -96,7 +96,13 @@ void laserCallback(const sensor_msgs::LaserScan& laser_scan) {
         ros::Duration(2.0).sleep();
     }
     g_radius_left = laser_scan.ranges[g_index_left];
+    if(g_radius_left == NAN){
+	g_radius_left = 4.0;
+    }
     g_radius_tan_test = laser_scan.ranges[g_index_tangent_left];
+    if(g_radius_tan_test == NAN){
+	g_radius_tan_test = 4.0;
+    }
     g_clearance_tan_test = g_radius_tan_test * cos(DANG_TANGENT_APPROX);
     //search for min ping dist:
     g_radius_min = 4;
@@ -186,15 +192,20 @@ int main(int argc, char **argv) {
             twist_commander.publish(twist_cmd);
             ROS_WARN("barrier ahead; need to spin");
             ROS_WARN("min ping dist = %f at index %d", g_radius_min, g_index_min_dist_ping);
-
+	
             double dtheta = ((double) (g_index_min_dist_ping - g_index_left)) * g_angle_increment - (M_PI/2.0 + g_angle_min);
             ROS_INFO("rotate dtheta = %f", dtheta);
             twist_cmd.angular.z = -YAW_RATE;
-            twist_commander.publish(twist_cmd);
             double dt = fabs(dtheta / YAW_RATE);
             ROS_INFO("spin for dt = %f", dt);
 	    
-	    ros::Duration(dt).sleep();
+	    timer=0.0; //reset the timer
+   	    while(timer < dt) {
+    	 	twist_commander.publish(twist_cmd);
+    	      	timer+=SAMPLE_DT;
+    	      	loop_timer.sleep();
+   	    }
+
             g_radius_min = -1.0;  //make sure we have a fresh update from lidar callback; crude trick
             while (g_radius_min < 0) { //val will change after a callback
                 ros::spinOnce();
@@ -236,6 +247,7 @@ int main(int argc, char **argv) {
             while (g_clearance_tan_test > TAN_THRESHOLD) {
                 ROS_WARN("trying to reconnect to wall w/ circular trajectory");
 		ROS_INFO("clearance to left, and clearance ahead left and tangent threshold: %f, %f, %f", g_radius_left, g_clearance_tan_test, TAN_THRESHOLD);
+		twist_commander.publish(twist_cmd);
                 ros::spinOnce();
                 loop_timer.sleep();
 		
