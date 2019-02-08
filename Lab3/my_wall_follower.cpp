@@ -19,7 +19,7 @@ nav_msgs::Odometry g_odom; //odom is not actually used in this code, but could b
 const double WALL_FOLLOW_RADIUS = 0.35;
 const double RADIUS_LEFT_TURN = 0.3;
 //some timing constants
-const double SPEED = 0.6; //0.3; // m/s speed command
+const double SPEED = 0.3; //0.3; // m/s speed command
 const double YAW_RATE = 0.3; //0.1; // rad/sec yaw rate command
 const double SAMPLE_DT = 0.01; //specify a sample period of 10ms  
 
@@ -41,8 +41,8 @@ double g_range_max = 0.0;
 
 //some useful constants computed once at first LIDAR callback:
 int g_index_min_dist_ping; //ping index corresponding to closest ray
-int g_index_90deg_right; //ping index at -pi/2, i.e. robot's right
-int g_index_90deg_left;  //ping index at +pi/2, i.e. robot;s left
+int g_index_right; //ping index at -pi/2, i.e. robot's right
+int g_index_left;  //ping index at +pi/2, i.e. robot;s left
 int g_index_tangent_left; //ping index slightly ahead of ping to left
 int g_index_front = -1; // init NOT real; callback will have to fix this
  //above is a crude way to indicate callback inits are necessary;
@@ -80,28 +80,28 @@ void laserCallback(const sensor_msgs::LaserScan& laser_scan) {
         g_range_max = laser_scan.range_max;
         // what is the index of the ping that is straight ahead?
         g_index_front = (int) ((0.0 - g_angle_min) / g_angle_increment);
-        g_index_90deg_left = (int) ((M_PI / 2.0 - g_angle_min) / g_angle_increment);
-        g_index_90deg_right = (int) ((-M_PI / 2.0 - g_angle_min) / g_angle_increment);
+        g_index_left = (int) ((M_PI / 2.0 - g_angle_min) / g_angle_increment);
+        g_index_right = (int) ((-M_PI / 2.0 - g_angle_min) / g_angle_increment);
         //arbitrarily choose to also look at ping xx rad CW from 90deg left
         // use this for tangent approx
-        g_index_tangent_left = g_index_90deg_left - (int) (DANG_TANGENT_APPROX / g_angle_increment);
+        g_index_tangent_left = g_index_left - (int) (DANG_TANGENT_APPROX / g_angle_increment);
         int num_pings = laser_scan.ranges.size();
         ROS_INFO("LIDAR setup: ");
         ROS_INFO("there are %d pings in the laserscan", num_pings);
         ROS_INFO(" g_index_front = %d", g_index_front);
-        ROS_INFO(" g_index_90deg_left = %d", g_index_90deg_left);
-        ROS_INFO(" g_index_90deg_right = %d", g_index_90deg_right);
+        ROS_INFO(" g_index_left = %d", g_index_left);
+        ROS_INFO(" g_index_right = %d", g_index_right);
         ROS_INFO(" g_index_tangent_left = %d", g_index_tangent_left);
         ros::Duration(2.0).sleep();
     }
-    g_radius_left = laser_scan.ranges[g_index_90deg_left];
+    g_radius_left = laser_scan.ranges[g_index_left];
     g_radius_tan_test = laser_scan.ranges[g_index_tangent_left];
     g_clearance_tan_test = g_radius_tan_test * cos(DANG_TANGENT_APPROX);
     //search for min ping dist:
     g_radius_min = g_radius_left;
     float r_test;
-    g_index_min_dist_ping = g_index_90deg_left;
-    for (int i = g_index_90deg_left; i >= g_index_90deg_right; i--) {
+    g_index_min_dist_ping = g_index_left;
+    for (int i = g_index_left; i >= g_index_right; i--) {
         r_test = laser_scan.ranges[i];
         //ROS_INFO("i, r_test = %d,  %f",i,r_test);
         if (r_test <= g_radius_min) {
@@ -175,7 +175,7 @@ int main(int argc, char **argv) {
             ROS_WARN("barrier ahead; need to spin");
             ROS_WARN("min ping dist = %f at index %d", g_radius_min, g_index_min_dist_ping);
 
-            double dtheta = ((double) (g_index_min_dist_ping - g_index_90deg_left)) * g_angle_increment;
+            double dtheta = ((double) (g_index_min_dist_ping - g_index_left)) * g_angle_increment - (M_PI/2.0 + g_angle_min);
             ROS_INFO("rotate dtheta = %f", dtheta);
             twist_cmd.angular.z = -YAW_RATE;
             twist_commander.publish(twist_cmd);
