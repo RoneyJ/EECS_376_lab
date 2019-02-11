@@ -28,8 +28,8 @@ const double SAMPLE_DT = 0.01; //specify a sample period of 10ms
 //BETTER would be to compute a tangent of the wall to the left
 const double DANG_TANGENT_APPROX = 0.2;
 
-//constant to hold threshold in which the robot determines if it's safe to move forward using g_clearance_tan_test for arcing and moving forward
-const double TAN_THRESHOLD = (WALL_FOLLOW_RADIUS / cos(DANG_TANGENT_APPROX));
+//global to hold threshold in which the robot determines if it's safe to move forward using g_clearance_tan_test for arcing and moving forward
+double TAN_THRESHOLD = 0.0;
 
 // these values to be set within the laser callback
 //parameters of the lidar:
@@ -91,19 +91,25 @@ void laserCallback(const sensor_msgs::LaserScan& laser_scan) {
         ROS_INFO("there are %d pings in the laserscan", num_pings);
         ROS_INFO(" g_index_front = %d", g_index_front);
         ROS_INFO(" g_index_left = %d", g_index_left);
+
         ROS_INFO(" g_index_right = %d", g_index_right);
         ROS_INFO(" g_index_tangent_left = %d", g_index_tangent_left);
         ros::Duration(2.0).sleep();
     }
-    g_radius_left = laser_scan.ranges[g_index_left];
-    if(g_radius_left == NAN){
+    TAN_THRESHOLD = (WALL_FOLLOW_RADIUS / cos(DANG_TANGENT_APPROX + (M_PI/2.0 + g_angle_min)));
+    if(laser_scan.ranges[g_index_left] <= g_range_max){// && laser_scan.ranges[g_index_left] >= g_range_min){
+	g_radius_left = laser_scan.ranges[g_index_left];
+    }
+    else {
 	g_radius_left = 4.0;
     }
-    g_radius_tan_test = laser_scan.ranges[g_index_tangent_left];
-    if(g_radius_tan_test == NAN){
-	g_radius_tan_test = 4.0;
+    if(laser_scan.ranges[g_index_tangent_left] <= g_range_max){// && laser_scan.ranges[g_index_tangent_left] >= g_range_min){
+	g_radius_tan_test = laser_scan.ranges[g_index_tangent_left];
     }
-    g_clearance_tan_test = g_radius_tan_test * cos(DANG_TANGENT_APPROX);
+    else{
+    	g_radius_tan_test = 4.0;
+    }
+    g_clearance_tan_test = g_radius_tan_test * cos(DANG_TANGENT_APPROX + (M_PI/2.0 + g_angle_min));
     //search for min ping dist:
     g_radius_min = 4;
     float r_test;
@@ -185,7 +191,8 @@ int main(int argc, char **argv) {
 
         ros::spinOnce();
         ROS_INFO("testing if mindist ping is other than left wall");
-        if ((g_radius_min < WALL_FOLLOW_RADIUS) && (g_index_min_dist_ping < g_index_tangent_left)) {
+	ROS_INFO("min ping dist = %f at index %d, left index = %d", g_radius_min, g_index_min_dist_ping, g_index_left);
+        if ((g_radius_min < WALL_FOLLOW_RADIUS) && (g_index_min_dist_ping < g_index_left)) {
             //if here, then there is a ping closer than left wall; rotate to make this min-dist ping on left
             twist_cmd.linear.x = 0; //halt
             twist_cmd.angular.z = 0; //halt
@@ -219,15 +226,16 @@ int main(int argc, char **argv) {
             twist_commander.publish(twist_cmd);
         }
         //should have clearance on left, as well as slightly forward from there, on left
-        ROS_INFO("tangent test clearance = %f", g_clearance_tan_test);
+        ROS_INFO("tangent threshold = %f", TAN_THRESHOLD);
         twist_cmd.linear.x = SPEED;
 	twist_cmd.angular.z = 0.0;
         ROS_INFO("clearance to left, and clearance ahead left: %f, %f", g_radius_left, g_clearance_tan_test);
         twist_commander.publish(twist_cmd);
-        while ((g_clearance_tan_test < TAN_THRESHOLD) && (g_index_min_dist_ping >= g_index_tangent_left)) {
+        while ((g_clearance_tan_test < WALL_FOLLOW_RADIUS) && (g_index_min_dist_ping >= g_index_tangent_left) && (g_radius_min >= WALL_FOLLOW_RADIUS)) {
             ROS_WARN("following left wall...");
+            ROS_INFO("min ping dist = %f at index %d, tan index = %d", g_radius_min, g_index_min_dist_ping, g_index_tangent_left);
             twist_cmd.linear.x = SPEED;
-            ROS_INFO("clearance to left, and clearance ahead left: %f, %f", g_radius_left, g_clearance_tan_test);
+            ROS_INFO("clearance to left, and clearance ahead left and threshold: %f, %f, %f", g_radius_left, g_clearance_tan_test, TAN_THRESHOLD);
             twist_commander.publish(twist_cmd);
             ros::spinOnce();
             loop_timer.sleep();
@@ -236,7 +244,7 @@ int main(int argc, char **argv) {
         if ((g_radius_min < WALL_FOLLOW_RADIUS) && (g_index_min_dist_ping < g_index_tangent_left)) {
             ROS_WARN("blocked ahead");
             ROS_WARN("min ping dist = %f at index %d", g_radius_min, g_index_min_dist_ping);
-        } else if (g_clearance_tan_test > TAN_THRESHOLD) {
+        } else if (g_clearance_tan_test > WALL_FOLLOW_RADIUS) {
             //if the test ping (fwd from left side) is no longer within follower radius, go hunting for it
             // by making a circular-arc left turn
             ROS_WARN("lost fwd test ping...turning left");
@@ -244,7 +252,7 @@ int main(int argc, char **argv) {
             twist_cmd.linear.x = RADIUS_LEFT_TURN*YAW_RATE;
             twist_commander.publish(twist_cmd);
 
-            while (g_clearance_tan_test > TAN_THRESHOLD) {
+            while (g_clearance_tan_test > WALL_FOLLOW_RADIUS) {
                 ROS_WARN("trying to reconnect to wall w/ circular trajectory");
 		ROS_INFO("clearance to left, and clearance ahead left and tangent threshold: %f, %f, %f", g_radius_left, g_clearance_tan_test, TAN_THRESHOLD);
 		twist_commander.publish(twist_cmd);
