@@ -16,9 +16,9 @@ nav_msgs::Odometry g_odom; //odom is not actually used in this code, but could b
 
 //some "magic" (tunable) numbers
 //define a radius within which we want to be near to a wall on the left
-const double WALL_FOLLOW_RADIUS = 0.5;
-const double TAN_THRESHOLD = 0.51;
-const double RADIUS_LEFT_TURN = 0.7;
+const double WALL_FOLLOW_RADIUS = 0.6;
+const double TAN_THRESHOLD = 0.6;
+const double RADIUS_LEFT_TURN = 0.6;
 //some timing constants
 const double SPEED = 0.2; //0.3; // m/s speed command
 const double YAW_RATE = 0.3; //0.1; // rad/sec yaw rate command
@@ -272,4 +272,3 @@ int main(int argc, char **argv) {
     } //loop forever
 
 }
-
