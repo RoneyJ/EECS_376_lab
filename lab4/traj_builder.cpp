@@ -404,45 +404,39 @@ void TrajBuilder::build_triangular_spin_traj(geometry_msgs::PoseStamped start_po
 //this function would be useful for planning a need for sudden braking
 //compute trajectory corresponding to applying max prudent decel to halt
 void TrajBuilder::build_braking_traj(geometry_msgs::PoseStamped start_pose,
-        std::vector<nav_msgs::Odometry> &vec_of_states) {
-	
+		std::vector<nav_msgs::Odometry> &vec_of_states, nav_msgs::Odometry start) {
+	//FINISH ME!
 	double x_start = start_pose.pose.position.x;
-    double y_start = start_pose.pose.position.y;
-    double speed_des = vec_of_states.back().twist.twist.linear.x;
-    
-    nav_msgs::Odometry des_state;
-    des_state.header = start_pose.header; //really, want to copy the frame_id
-    des_state.pose.pose = start_pose.pose; //start from here
-    des_state.twist.twist = halt_twist_; // insist on starting from rest
-    vec_of_states.back().twist.twist.linear.x = speed_des;
-    
-    double t_decel = speed_des / accel_max_;
-    int npts_ramp = round(t_decel / dt_);
-    double x_des = x_start; //start from here
-    double y_des = y_start;
-
-    des_state.twist.twist.angular.z = 0.0; //omega_des; will not change
-    double t = 0.0;
-	
-	// use the accel_max_ to decelerate to stopping
-	
-	vec_of_states.clear();
-	vec_of_states.push_back(des_state);
-
-    //ramp down:
-    for (int i = 0; i < npts_ramp; i++) {
-        speed_des -= accel_max_*dt_; //Euler one-step integration
-        des_state.twist.twist.linear.x = speed_des;
-        x_des += speed_des * dt_; //Euler one-step integration
-        y_des += speed_des * dt_; //Euler one-step integration        
-        des_state.pose.pose.position.x = x_des;
-        des_state.pose.pose.position.y = y_des;
-        vec_of_states.push_back(des_state);
-    }
-    //make sure final orientation will follow from point-and-go direction
-    des_state.twist.twist = halt_twist_; // insist on starting from rest
-    vec_of_states.push_back(des_state);
-
+	double y_start = start_pose.pose.position.y;
+	double psi_des = convertPlanarQuat2Psi(start_pose.pose.orientation);
+	double x_des = x_start; //start from here
+	double y_des = y_start;
+	ROS_INFO("build braking traj");
+	nav_msgs::Odometry des_state;
+	std::vector<nav_msgs::Odometry>::iterator it;
+	it = vec_of_states.begin();
+	des_state.header = start_pose.header; //really, want to copy the frame_id
+	des_state.pose.pose = start_pose.pose; //start from here
+	double speed_des = start.twist.twist.linear.x;
+	ROS_INFO("speed_des = %f", speed_des);
+	des_state.twist.twist.angular.z = 0.0; //omega_des; will not change
+	double ramp_down_time = speed_des / accel_max_;
+	double npts_ramp = round(ramp_down_time / dt_);
+	std::vector<nav_msgs::Odometry> braking_traj;
+	//ramp down velocity to halt:
+	for (int i = 0; i < npts_ramp; i++) {
+		speed_des -= accel_max_*dt_; //Euler one-step integration
+		des_state.twist.twist.linear.x = speed_des;
+		x_des += speed_des * dt_ * cos(psi_des); //Euler one-step integration
+		y_des += speed_des * dt_ * sin(psi_des); //Euler one-step integration
+		des_state.pose.pose.position.x = x_des;
+		des_state.pose.pose.position.y = y_des;
+		ROS_INFO("speed_des = %f", speed_des);
+		braking_traj.push_back(des_state);
+	}
+	des_state.twist.twist = halt_twist_; // insist on full stop
+	braking_traj.push_back(des_state);
+	vec_of_states = braking_traj;
 }
 
 //main fnc of this library: constructs a spin-in-place reorientation to
