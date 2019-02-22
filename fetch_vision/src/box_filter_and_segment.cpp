@@ -10,7 +10,7 @@
 // voxel-grid filtering: pcl::VoxelGrid,  setInputCloud(), setLeafSize(), filter()
 //wsn Feb 2019
 
-#include<ros/ros.h> 
+#include <ros/ros.h> 
 #include <stdlib.h>
 #include <math.h>
 
@@ -30,9 +30,11 @@
 //will use filter objects "passthrough" and "voxel_grid" in this example
 #include <pcl/filters/passthrough.h>
 #include <pcl/filters/voxel_grid.h> 
+#include <pcl_utils/pcl_utils.h>
 
 //headers for using OpenCV functions
 #include <opencv2/core/utility.hpp>
+#include <opencv2/core/eigen.hpp>
 #include "opencv2/imgproc.hpp"
 #include "opencv2/imgcodecs.hpp"
 #include <opencv2/highgui/highgui.hpp>
@@ -53,6 +55,9 @@ const float MIN_Y = -0.5; //include points starting -0.5m to left of robot
 const float MAX_Y = 0.5; //include points up to 0.5m to right of robot
 const float MIN_Z = -0.05; //2cm above the table top
 const float MAX_Z = 0.05; //consider points up to 0.12m above table top
+
+const float MID_X_PIXEL = 199;
+const float MID_Y_PIXEL = 99;
 
 //choose, e.g., resolution of 5mm, so 100x200 image for 0.5m x 1.0m pointcloud
 // adjustable--> image  size
@@ -193,8 +198,8 @@ void blob_color(void) {
             int label = labelImage.at<int>(r, c);
             
             	arr_num_pixels[label]++;
-            	arr_x_pixel_values[label] += r;
-            	arr_y_pixel_values[label] += c;
+            	arr_x_pixel_values[label] += c;
+            	arr_y_pixel_values[label] += r;
             
         }
     }
@@ -204,13 +209,14 @@ void blob_color(void) {
     	float x_centroid = 0.0;
     	float y_centroid = 0.0;
 
-    	x_centroid = arr_x_pixel_values[i] / arr_num_pixels[i];
-    	y_centroid = arr_y_pixel_values[i] / arr_num_pixels[i];
+    	y_centroid = (199 - (arr_x_pixel_values[i] / arr_num_pixels[i])) / PIXELS_PER_METER;
+    	x_centroid = ((99 - (arr_y_pixel_values[i] / arr_num_pixels[i])) / PIXELS_PER_METER) + 0.65;
 
 	    x_centroids.push_back(x_centroid);
 	    y_centroids.push_back(y_centroid);
 	}	
 }
+
 
 int main(int argc, char** argv) {
     ros::init(argc, argv, "plane_finder"); //node name
@@ -327,8 +333,22 @@ int main(int argc, char** argv) {
     blob_color();
 
     for(int i = 1; i < x_centroids.size(); i++){
-    	ROS_INFO("x,v = %.2f, %.2f", y_centroids.at(i), x_centroids.at(i));
+    	ROS_INFO("x,y = %.2f, %.2f", x_centroids.at(i), y_centroids.at(i));
     }
+
+	PclUtils p(&nh);
+
+	Eigen::MatrixXf eigenT;
+	Eigen::Vector3f normal;
+	double dist;
+
+
+	//**NEED TO GET THIS FUNCTION WORKING**
+	//cv2eigen(dst, eigenT);
+
+	//p.fit_points_to_plane(eigenT, normal, dist);
+
+	//ROS_INFO("plane distance = %f", dist);
 
     //create openCV display windows
     // this is only for debugging; can go away later

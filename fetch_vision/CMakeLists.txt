@@ -27,7 +27,8 @@ catkin_simple()
 # SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
 
 # Libraries: uncomment the following and edit arguments to create a new library
-# cs_add_library(my_lib src/my_lib.cpp)   
+# cs_add_library(my_lib src/my_lib.cpp)
+#cs_add_library(pcl_utils src/pcl_utils.cpp)      
 
 # Executables: uncomment the following and edit arguments to compile new nodes
 # may add more of these lines for more nodes from the same package
@@ -44,6 +45,7 @@ cs_add_executable(fetch_vision src/box_filter_and_segment.cpp)
 # target_link_libraries(example my_lib)
 #target_link_libraries( find_blobs ${OpenCV_LIBS})
 target_link_libraries( fetch_vision ${OpenCV_LIBS})
+target_link_libraries( fetch_vision pcl_utils)
 cs_install()
 cs_export()
     
