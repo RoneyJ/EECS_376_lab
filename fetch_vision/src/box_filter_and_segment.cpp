@@ -75,6 +75,8 @@ Mat dst(bw_img.size(), CV_8UC3);
 vector<float> x_centroids;
 vector<float> y_centroids;
 
+PclUtils *g_pcl_ptr;
+
 void find_indices_box_filtered(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr, Eigen::Vector3f box_pt_min,
         Eigen::Vector3f box_pt_max, vector<int> &indices) {
     int npts = input_cloud_ptr->points.size();
@@ -193,13 +195,16 @@ void blob_color(void) {
     int arr_x_pixel_values[nLabels] = {0};	//stores the x_coordinate of points contributing to each centroid
     int arr_y_pixel_values[nLabels] = {0};	//stores the y_coordinate of points contributing to each centroid
 
+	
+
+
     for (int r = 0; r < dst.rows; ++r) {
         for (int c = 0; c < dst.cols; ++c) {
-            int label = labelImage.at<int>(r, c);
-            
-            	arr_num_pixels[label]++;
-            	arr_x_pixel_values[label] += c;
-            	arr_y_pixel_values[label] += r;
+	        int label = labelImage.at<int>(r, c);
+	        
+	        	arr_num_pixels[label]++;
+	        	arr_x_pixel_values[label] += c;
+	        	arr_y_pixel_values[label] += r;
             
         }
     }
@@ -214,8 +219,43 @@ void blob_color(void) {
 
 	    x_centroids.push_back(x_centroid);
 	    y_centroids.push_back(y_centroid);
-	}	
+	}
+
+	ROS_INFO("Calculated centroids");	
+
+
+	//Eigen::Map<MatrixXf> e_mat( dst.data() );
+	Eigen::MatrixXf m1(dst.rows, dst.cols);
+
+	int ONE = 1;	
+
+	for (int r = 0; r < dst.rows; ++r) {
+        for (int c = 0; c < dst.cols; ++c) {
+            int label = labelImage.at<int>(r, c);
+            
+        	if(label == ONE){
+				m1(r, c) = 1;
+			}	
+			else{
+				m1(r, c) = 0;
+			}
+            
+        }
+    }
+	ROS_INFO("Calculated matrix");
+
+	Eigen::Vector3f plane_normal;
+	double plane_dist;
+
+	g_pcl_ptr->fit_points_to_plane(m1, plane_normal, plane_dist);	//seg fault here. Why
+
+	ROS_INFO("Calculated normal");
+
+	ROS_INFO("%f, %f, %f", plane_normal(0), plane_normal(1), plane_normal(2));
+	ROS_INFO("%f", plane_dist);
+	
 }
+
 
 
 int main(int argc, char** argv) {
