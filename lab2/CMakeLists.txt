@@ -135,8 +135,8 @@ include_directories(
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that targe, nan, nan, 3.441739559173584, 3.443732738494873, 3.477877140045166, 3.4477431774139404, 3.481940746307373, 3.4839844703674316, 3.4860363006591797, 3.488095760345459, 3.4901633262634277, t names across packages don't collide
 # add_executable(${PROJECT_NAME}_node src/lab2_node.cpp)
-add_executable(lidar_alarm src/my_lidar_alarm.cpp)
-add_executable(reactive_commander src/my_reactive_commander.cpp)
+add_executable(lab2_lidar_alarm src/my_lidar_alarm.cpp)
+add_executable(lab2_reactive_commander src/my_reactive_commander.cpp)
 
 
 ## Rename C++ executable without prefix
@@ -154,11 +154,11 @@ add_executable(reactive_commander src/my_reactive_commander.cpp)
 #   ${catkin_LIBRARIES}
 # )
 
-target_link_libraries(lidar_alarm
+target_link_libraries(lab2_lidar_alarm
   ${catkin_LIBRARIES}
 )
 
-target_link_libraries(reactive_commander
+target_link_libraries(lab2_reactive_commander
   ${catkin_LIBRARIES}
 )
 

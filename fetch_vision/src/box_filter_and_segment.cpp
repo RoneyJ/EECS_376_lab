@@ -31,6 +31,7 @@
 #include <pcl/filters/passthrough.h>
 #include <pcl/filters/voxel_grid.h> 
 #include <pcl_utils/pcl_utils.h>
+#include <xform_utils/xform_utils.h>
 
 //headers for using OpenCV functions
 #include <opencv2/core/utility.hpp>
@@ -71,11 +72,17 @@ Mat_<uchar> bw_img(Nu, Nv);
 Mat_<int>labelImage(Nu, Nv);
 Mat dst(bw_img.size(), CV_8UC3);
 
-//Globl Variables for Object Centroids
+//Global Variables for Object Centroids
 vector<float> x_centroids;
 vector<float> y_centroids;
+//Global Variable for object orientatinos about z-axis
+vector<float> orientations;
+//Global Variable matrix to hold quaternions
+vector<geometry_msgs::Quaternion> vec_of_quat; 
+//Major axis and centroids of object for use by functions
+Eigen::Vector3f major_axis_,centroid_,plane_normal;
 
-PclUtils *g_pcl_ptr;
+XformUtils *g_xform_ptr;
 
 void find_indices_box_filtered(pcl::PointCloud<pcl::PointXYZRGB>::Ptr input_cloud_ptr, Eigen::Vector3f box_pt_min,
         Eigen::Vector3f box_pt_max, vector<int> &indices) {
@@ -154,6 +161,125 @@ Eigen::Affine3f compute_affine_cam_wrt_torso_lift_link(void) {
     return affine_cam_wrt_torso;
 }
 
+void find_orientation(Eigen::MatrixXf points_mat, float &orientation, geometry_msgs::Quaternion &quaternion) {
+    //ROS_INFO("starting identification of plane from data: ");
+    int npts = points_mat.cols(); // number of points = number of columns in matrix; check the size
+    
+    // first compute the centroid of the data:
+    //Eigen::Vector3f centroid; // make this member var, centroid_
+    centroid_ = Eigen::MatrixXf::Zero(3, 1); // see http://eigen.tuxfamily.org/dox/AsciiQuickReference.txt
+    
+    //centroid = compute_centroid(points_mat);
+     for (int ipt = 0; ipt < npts; ipt++) {
+        centroid_ += points_mat.col(ipt); //add all the column vectors together
+    }
+    centroid_ /= npts; //divide by the number of points to get the centroid    
+    cout<<"centroid: "<<centroid_.transpose()<<endl;
+
+
+    // subtract this centroid from all points in points_mat:
+    Eigen::MatrixXf points_offset_mat = points_mat;
+    for (int ipt = 0; ipt < npts; ipt++) {
+        points_offset_mat.col(ipt) = points_offset_mat.col(ipt) - centroid_;
+    }
+    //compute the covariance matrix w/rt x,y,z:
+    Eigen::Matrix3f CoVar;
+    CoVar = points_offset_mat * (points_offset_mat.transpose()); //3xN matrix times Nx3 matrix is 3x3
+    //cout<<"covariance: "<<endl;
+    //cout<<CoVar<<endl;
+
+    // here is a more complex object: a solver for eigenvalues/eigenvectors;
+    // we will initialize it with our covariance matrix, which will induce computing eval/evec pairs
+    Eigen::EigenSolver<Eigen::Matrix3f> es3f(CoVar);
+
+    Eigen::VectorXf evals; //we'll extract the eigenvalues to here
+    //cout<<"size of evals: "<<es3d.eigenvalues().size()<<endl;
+    //cout<<"rows,cols = "<<es3d.eigenvalues().rows()<<", "<<es3d.eigenvalues().cols()<<endl;
+    //cout << "The eigenvalues of CoVar are:" << endl << es3d.eigenvalues().transpose() << endl;
+    //cout<<"(these should be real numbers, and one of them should be zero)"<<endl;
+    //cout << "The matrix of eigenvectors, V, is:" << endl;
+    //cout<< es3d.eigenvectors() << endl << endl;
+    //cout<< "(these should be real-valued vectors)"<<endl;
+    // in general, the eigenvalues/eigenvectors can be complex numbers
+    //however, since our matrix is self-adjoint (symmetric, positive semi-definite), we expect
+    // real-valued evals/evecs;  we'll need to strip off the real parts of the solution
+
+    evals = es3f.eigenvalues().real(); // grab just the real parts
+    //cout<<"real parts of evals: "<<evals.transpose()<<endl;
+
+    // our solution should correspond to an e-val of zero, which will be the minimum eval
+    //  (all other evals for the covariance matrix will be >0)
+    // however, the solution does not order the evals, so we'll have to find the one of interest ourselves
+
+    double min_lambda = evals[0]; //initialize the hunt for min eval
+    double max_lambda = evals[0]; // and for max eval
+    //Eigen::Vector3cf complex_vec; // here is a 3x1 vector of double-precision, complex numbers
+    //Eigen::Vector3f evec0, evec1, evec2; //, major_axis; 
+    //evec0 = es3f.eigenvectors().col(0).real();
+    //evec1 = es3f.eigenvectors().col(1).real();
+    //evec2 = es3f.eigenvectors().col(2).real();  
+    
+    
+    //((pt-centroid)*evec)*2 = evec'*points_offset_mat'*points_offset_mat*evec = 
+    // = evec'*CoVar*evec = evec'*lambda*evec = lambda
+    // min lambda is ideally zero for evec= plane_normal, since points_offset_mat*plane_normal~= 0
+    // max lambda is associated with direction of major axis
+    
+    //sort the evals:
+    
+    //complex_vec = es3f.eigenvectors().col(0); // here's the first e-vec, corresponding to first e-val
+    //cout<<"complex_vec: "<<endl;
+    //cout<<complex_vec<<endl;
+    plane_normal = es3f.eigenvectors().col(0).real(); //complex_vec.real(); //strip off the real part
+    major_axis_ = es3f.eigenvectors().col(0).real(); // starting assumptions
+    
+    //cout<<"real part: "<<est_plane_normal.transpose()<<endl;
+    //est_plane_normal = es3d.eigenvectors().col(0).real(); // evecs in columns
+
+    double lambda_test;
+    int i_normal = 0;
+    int i_major_axis=0;
+    //loop through "all" ("both", in this 3-D case) the rest of the solns, seeking min e-val
+    for (int ivec = 1; ivec < 3; ivec++) {
+        lambda_test = evals[ivec];
+        if (lambda_test < min_lambda) {
+            min_lambda = lambda_test;
+            i_normal = ivec; //this index is closer to index of min eval
+            plane_normal = es3f.eigenvectors().col(i_normal).real();
+        }
+        if (lambda_test > max_lambda) {
+            max_lambda = lambda_test;
+            i_major_axis = ivec; //this index is closer to index of min eval
+            major_axis_ = es3f.eigenvectors().col(i_major_axis).real();
+        }        
+    }
+
+	float x_component = major_axis_(0);
+	float y_component = major_axis_(1);
+	orientation = atan2(y_component,x_component);
+
+	quaternion = g_xform_ptr->convertPlanarPsi2Quaternion(orientation);
+    // at this point, we have the minimum eval in "min_lambda", and the plane normal
+    // (corresponding evec) in "est_plane_normal"/
+    // these correspond to the ith entry of i_normal
+    //cout<<"min eval is "<<min_lambda<<", corresponding to component "<<i_normal<<endl;
+    //cout<<"corresponding evec (est plane normal): "<<plane_normal.transpose()<<endl;
+    //cout<<"max eval is "<<max_lambda<<", corresponding to component "<<i_major_axis<<endl;
+    //cout<<"corresponding evec (est major axis): "<<major_axis_.transpose()<<endl;  
+    
+    //what is the correct sign of the normal?  If the data is with respect to the camera frame,
+    // then the camera optical axis is z axis, and thus any points reflected must be from a surface
+    // with negative z component of surface normal
+    if (plane_normal(2)>0) plane_normal = -plane_normal; // negate, if necessary
+    
+    //cout<<"correct answer is: "<<normal_vec.transpose()<<endl;
+    //cout<<"est plane distance from origin = "<<est_dist<<endl;
+    //cout<<"correct answer is: "<<dist<<endl;
+    //cout<<endl<<endl;    
+    //ROS_INFO("major_axis: %f, %f, %f",major_axis_(0),major_axis_(1),major_axis_(2));
+    //ROS_INFO("plane normal: %f, %f, %f",plane_normal(0),plane_normal(1),plane_normal(2));
+}
+
 //given a binary image in bw_img, find and label connected regions  (blobs)
 // labelImage will contain integer labels with 0= background, 1 = first blob found,
 // ...up to nBlobs
@@ -215,48 +341,34 @@ void blob_color(void) {
     	float y_centroid = 0.0;
 
     	y_centroid = (199 - (arr_x_pixel_values[i] / arr_num_pixels[i])) / PIXELS_PER_METER;
-    	x_centroid = ((99 - (arr_y_pixel_values[i] / arr_num_pixels[i])) / PIXELS_PER_METER) + 0.65;
+    	x_centroid = ((99 - (arr_y_pixel_values[i] / arr_num_pixels[i])) / PIXELS_PER_METER) + ((MAX_X - MIN_X)/2) + MIN_X;
 
 	    x_centroids.push_back(x_centroid);
 	    y_centroids.push_back(y_centroid);
 	}
-
-	ROS_INFO("Calculated centroids");	
-
-
-	//Eigen::Map<MatrixXf> e_mat( dst.data() );
-	Eigen::MatrixXf m1(dst.rows, dst.cols);
-
-	int ONE = 1;	
-
-	for (int r = 0; r < dst.rows; ++r) {
-        for (int c = 0; c < dst.cols; ++c) {
-            int label = labelImage.at<int>(r, c);
-            
-        	if(label == ONE){
-				m1(r, c) = 1;
-			}	
-			else{
-				m1(r, c) = 0;
-			}
-            
-        }
-    }
-	ROS_INFO("Calculated matrix");
-
-	Eigen::Vector3f plane_normal;
-	double plane_dist;
-
-	g_pcl_ptr->fit_points_to_plane(m1, plane_normal, plane_dist);	//seg fault here. Why
-
-	ROS_INFO("Calculated normal");
-
-	ROS_INFO("%f, %f, %f", plane_normal(0), plane_normal(1), plane_normal(2));
-	ROS_INFO("%f", plane_dist);
 	
+	Eigen::Vector3f e_pt;
+	for(int label = 1; label < nLabels; label++){
+		int npts_blob = arr_num_pixels[label];
+		Eigen::MatrixXf blob(3, npts_blob);
+		int col_num = 0;
+		for(int r = 0; r < labelImage.rows; r++){
+			for(int c = 0; c < labelImage.cols; c++){
+				int label_num = labelImage.at<int>(r,c);
+				if(label_num == label){
+					e_pt<<c,r,0.0;
+					blob.col(col_num) = e_pt;
+					col_num++;
+				}
+			}
+		}
+		float angle;
+		geometry_msgs::Quaternion quat;
+		find_orientation(blob, angle, quat);
+		orientations.push_back(angle);
+		vec_of_quat.push_back(quat);
+	}
 }
-
-
 
 int main(int argc, char** argv) {
     ros::init(argc, argv, "plane_finder"); //node name
@@ -376,19 +488,13 @@ int main(int argc, char** argv) {
     	ROS_INFO("x,y = %.2f, %.2f", x_centroids.at(i), y_centroids.at(i));
     }
 
-	PclUtils p(&nh);
+	for(int i = 0; i < orientations.size(); i++){
+		ROS_INFO("orientation of object %d = %f", i, orientations.at(i));
+	}
 
-	Eigen::MatrixXf eigenT;
-	Eigen::Vector3f normal;
-	double dist;
-
-
-	//**NEED TO GET THIS FUNCTION WORKING**
-	//cv2eigen(dst, eigenT);
-
-	//p.fit_points_to_plane(eigenT, normal, dist);
-
-	//ROS_INFO("plane distance = %f", dist);
+	for(int i = 0; i < vec_of_quat.size(); i++){
+		cout<< vec_of_quat.at(i) << endl;
+	}
 
     //create openCV display windows
     // this is only for debugging; can go away later
