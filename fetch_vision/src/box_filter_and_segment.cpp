@@ -13,6 +13,7 @@
 #include <ros/ros.h> 
 #include <stdlib.h>
 #include <math.h>
+#include <cmath>
 
 #include <sensor_msgs/PointCloud2.h> 
 #include <pcl_ros/point_cloud.h> //to convert between PCL and ROS
@@ -255,7 +256,7 @@ void find_orientation(Eigen::MatrixXf points_mat, float &orientation, geometry_m
     }
 
 	float x_component = major_axis_(0);
-	float y_component = major_axis_(1);
+	float y_component = -major_axis_(1);
 	orientation = atan2(y_component,x_component);
 
 	quaternion = g_xform_ptr->convertPlanarPsi2Quaternion(orientation);
@@ -365,7 +366,8 @@ void blob_color(void) {
 		float angle;
 		geometry_msgs::Quaternion quat;
 		find_orientation(blob, angle, quat);
-		orientations.push_back(angle);
+		//add pi/2 to factor in rotated camera frame wrt robot
+		orientations.push_back(angle - M_PI/2);
 		vec_of_quat.push_back(quat);
 	}
 }
@@ -489,10 +491,11 @@ int main(int argc, char** argv) {
     }
 
 	for(int i = 0; i < orientations.size(); i++){
-		ROS_INFO("orientation of object %d = %f", i, orientations.at(i));
+		ROS_INFO("orientation of object %d = %f", (i + 1), orientations.at(i));
 	}
 
 	for(int i = 0; i < vec_of_quat.size(); i++){
+		ROS_INFO("quaternion of object %d", (i+1));
 		cout<< vec_of_quat.at(i) << endl;
 	}
 
