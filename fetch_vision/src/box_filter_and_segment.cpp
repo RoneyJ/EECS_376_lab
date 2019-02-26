@@ -257,7 +257,7 @@ void find_orientation(Eigen::MatrixXf points_mat, float &orientation, geometry_m
 
 	float x_component = major_axis_(0);
 	float y_component = -major_axis_(1);
-	orientation = atan2(y_component,x_component);
+	orientation = atan2(y_component,x_component) - M_PI/2;
 
 	quaternion = g_xform_ptr->convertPlanarPsi2Quaternion(orientation);
     // at this point, we have the minimum eval in "min_lambda", and the plane normal
@@ -367,7 +367,7 @@ void blob_color(void) {
 		geometry_msgs::Quaternion quat;
 		find_orientation(blob, angle, quat);
 		//add pi/2 to factor in rotated camera frame wrt robot
-		orientations.push_back(angle - M_PI/2);
+		orientations.push_back(angle);
 		vec_of_quat.push_back(quat);
 	}
 }
