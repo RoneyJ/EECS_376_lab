@@ -9,7 +9,7 @@
 #include <math.h>
 #include <std_srvs/Trigger.h>
 
-const double MIN_SAFE_DISTANCE = 2.0; // set alarm if anything is within 0.5m of the front of robot
+const double MIN_SAFE_DISTANCE = 4.0; // set alarm if anything is within 0.5m of the front of robot
 const double MIN_SAFE_WIDTH = 0.3; 
 
 // these values to be set within the laser callback
