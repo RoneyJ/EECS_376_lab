@@ -37,14 +37,24 @@ int main(int argc, char **argv) {
     geometry_msgs::PoseStamped pose_stamped;
     pose_stamped.header.frame_id = "world";
     geometry_msgs::Pose pose;
-    pose.position.x = 3.0; // say desired x-coord is 5
-    pose.position.y = 0.0;
-    pose.position.z = 0.0; // let's hope so!
-    quat = convertPlanarPhi2Quaternion(0);
-    pose.orientation = quat;
-    pose_stamped.pose = pose;
-    path_srv.request.path.poses.push_back(pose_stamped);
+    
  
+
+    float start = 0.0;
+    float end = -32.0;
+
+    for(double i = start; i >= end; i-=0.5){
+		ROS_INFO("iteration %f", i);
+
+            pose.position.x = 0.0; // say desired x-coord is 5
+	    pose.position.y = i;
+	    pose.position.z = 0.0; // let's hope so!
+	    //quat = convertPlanarPhi2Quaternion(0);
+	    //pose.orientation = quat;
+	    pose_stamped.pose = pose;
+	    path_srv.request.path.poses.push_back(pose_stamped);
+    }
+
     /*pose.position.y = 5.0;
     pose_stamped.pose = pose;
     path_srv.request.path.poses.push_back(pose_stamped);
