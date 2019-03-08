@@ -38,6 +38,7 @@ cs_add_executable(pub_des_state_path_client_3x3 src/pub_des_state_path_client_3m
 cs_add_executable(starting_pen_pub_des_state_path_client src/starting_pen_pub_des_state_path_client.cpp)
 cs_add_executable(glennan_pub_des_state_path_client src/glennan_pub_des_state_path_client.cpp)
 cs_add_executable(pub_des_state_jinx_hallway src/pub_des_state_jinx_hallway.cpp)
+cs_add_executable(clear_traj src/clear_traj.cpp)
 
 
 #the following is required, if desire to link a node in this package with a library created in this same package

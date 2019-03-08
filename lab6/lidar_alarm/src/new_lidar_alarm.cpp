@@ -9,7 +9,7 @@
 #include <math.h>
 #include <std_srvs/Trigger.h>
 
-const double MIN_SAFE_DISTANCE = 0.8; // set alarm if anything is within 0.5m of the front of robot
+const double MIN_SAFE_DISTANCE = 0.59; // set alarm if anything is within 0.5m of the front of robot
 const double MIN_SAFE_WIDTH = 0.3; 
 
 const double START_DIST = 0.06;
@@ -30,6 +30,8 @@ int index_diff = 0; // difference from ping_index needed to be checked (for the 
 
 bool ESTOP_ = false;
 
+bool FLAG_ = false;
+
 ros::Publisher lidar_alarm_publisher_;
 ros::Publisher lidar_dist_publisher_;
 ros::Publisher lidar_index_publisher_;
@@ -43,6 +45,10 @@ std_srvs::Trigger estop_clear_srv_;
 
 void estopCallback(const std_msgs::Bool stop){
 	ESTOP_ = stop.data;
+}
+
+void flagCallback(const std_msgs::Bool flag){
+	FLAG_ = flag.data;
 }
 
 void laserCallback(const sensor_msgs::LaserScan& laser_scan) {
@@ -108,7 +114,7 @@ void laserCallback(const sensor_msgs::LaserScan& laser_scan) {
 	ROS_WARN("Path clear: cancelling e-stop");
     }
 
-    if((laser_alarm_ && !srvcall) || (ESTOP_ && !srvcall)){
+    if(((laser_alarm_ && !srvcall) || (ESTOP_ && !srvcall)) && !FLAG_){
 	estop_client_.call(estop_srv_);
 	srvcall = true;
 	ROS_WARN("Obstacle detected! E-stop triggered!");
@@ -126,7 +132,8 @@ int main(int argc, char **argv) {
     ros::Publisher pub3 = nh.advertise<std_msgs::Float32>("lidar_index", 1);  
     lidar_index_publisher_ = pub3;
     ros::Subscriber lidar_subscriber = nh.subscribe("/scan", 1, laserCallback);
-	ros::Subscriber estop_subscriber = nh.subscribe("/ESTOP", 1, estopCallback);
+    ros::Subscriber estop_subscriber = nh.subscribe("/ESTOP", 1, estopCallback);
+    ros::Subscriber lidar_flag = nh.subscribe("lidar_flag", 1, flagCallback);
 
     estop_client_ = nh.serviceClient<std_srvs::TriggerRequest>("estop_service");
     estop_clear_client_ = nh.serviceClient<std_srvs::TriggerRequest>("clear_estop_service");

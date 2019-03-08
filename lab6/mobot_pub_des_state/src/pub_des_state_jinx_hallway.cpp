@@ -9,7 +9,14 @@
 #include <nav_msgs/Path.h>
 #include <geometry_msgs/Pose.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <std_msgs/Bool.h>
+
 using namespace std;
+
+std_msgs::Bool lidar_alarm_set;
+
+const bool no_lidar_alarm = true;
+const bool lidar_alarm = false;
 
 geometry_msgs::Quaternion convertPlanarPhi2Quaternion(double phi) {
     geometry_msgs::Quaternion quaternion;
@@ -25,6 +32,8 @@ int main(int argc, char **argv) {
     ros::NodeHandle n;
     ros::ServiceClient client = n.serviceClient<mobot_pub_des_state::path>("append_path_queue_service");
     geometry_msgs::Quaternion quat;
+
+    ros::Publisher pub = n.advertise<std_msgs::Bool>("lidar_flag", 1);
     
     while (!client.exists()) {
       ROS_INFO("waiting for service...");
@@ -41,13 +50,14 @@ int main(int argc, char **argv) {
  
 
     float start = 0.0;
-    float end = -32.0;
+    float end = 12.5; //32.0;
 
-    for(double i = start; i >= end; i-=1){
-		ROS_INFO("iteration %f", i);
-
-            pose.position.x = 0.0; // say desired x-coord is 5
-	    pose.position.y = i;
+    for(double i = start; i <= end; i+=0.5){
+	    ROS_INFO("iteration %f", i);
+	    lidar_alarm_set.data = lidar_alarm;
+	    pub.publish(lidar_alarm_set);
+            pose.position.x = i;
+	    pose.position.y = 0.0;
 	    pose.position.z = 0.0; // let's hope so!
 	    //quat = convertPlanarPhi2Quaternion(0);
 	    //pose.orientation = quat;
@@ -55,21 +65,31 @@ int main(int argc, char **argv) {
 	    path_srv.request.path.poses.push_back(pose_stamped);
     }
 
-    /*pose.position.y = 5.0;
-    pose_stamped.pose = pose;
-    path_srv.request.path.poses.push_back(pose_stamped);
+    //lidar_alarm_set.data = no_lidar_alarm;
+    //pub.publish(lidar_alarm_set);
+    //quat = convertPlanarPhi2Quaternion(M_PI);
+    //pose.orientation = quat;
+    //path_srv.request.path.poses.push_back(pose_stamped);
 
-    pose.position.x = 0.0;
-    pose_stamped.pose = pose;
-    path_srv.request.path.poses.push_back(pose_stamped);
-    
-    pose.position.y = 0.0;
-    pose_stamped.pose = pose;
-    path_srv.request.path.poses.push_back(pose_stamped);
-    
-    //repeat (x,y) with new heading:
-    pose_stamped.pose.orientation = convertPlanarPhi2Quaternion(0); 
-    path_srv.request.path.poses.push_back(pose_stamped);*/
+    //pose.position.x = end - 0.02;
+    //pose_stamped.pose = pose;
+    //quat = convertPlanarPhi2Quaternion(M_PI);
+    //pose.orientation = quat;
+    //path_srv.request.path.poses.push_back(pose_stamped);
+
+    for(double i = end - 0.5; i >= start; i-=0.5){
+	    ROS_INFO("iteration %f", i);
+	    lidar_alarm_set.data = lidar_alarm;
+	    pub.publish(lidar_alarm_set);
+            pose.position.x = i;
+	    pose.position.y = 0.0;
+	    pose.position.z = 0.0; // let's hope so!
+	    //quat = convertPlanarPhi2Quaternion(0);
+	    //pose.orientation = quat;
+	    pose_stamped.pose = pose;
+	    path_srv.request.path.poses.push_back(pose_stamped);
+    }
+   
     
     client.call(path_srv);
 

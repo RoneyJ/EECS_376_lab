@@ -35,13 +35,13 @@
 
 const double UPDATE_RATE = 50.0; // choose the desired-state publication update rate
 
-const double K_PHI= 25.0; //10.0    //7.0  13.0 control gains for steering
-const double K_DISP = 5.0; //3.0   //1.5 4.5
-const double K_TRIP_DIST = 0.5; //1.0
+const double K_PHI= 10.0; //10.0    //7.0  13.0 control gains for steering
+const double K_DISP = 6.0; //3.0   //1.5 4.5
+const double K_TRIP_DIST = 1.0; //1.0
 
 // dynamic limitations:  these apply to the steering controller; they may be larger than the limits on des state generation
-const double MAX_SPEED = 1.0;   //1.0; // m/sec; adjust this
-const double MAX_OMEGA = 1.0;   //1.0; //1.0; // rad/sec; adjust this
+const double MAX_SPEED = 0.5;   //1.0; // m/sec; adjust this
+const double MAX_OMEGA = 0.5;   //1.0; //1.0; // rad/sec; adjust this
 
 
 // define a class, including a constructor, member variables and member functions
