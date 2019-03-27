@@ -21,7 +21,7 @@ SteeringController::SteeringController(ros::NodeHandle* nodehandle):nh_(*nodehan
     initializePublishers();
     //initializeServices();
     
-    g_odom_tf_phi = 1000.0; // put in impossible value for heading; test this value to make sure we have received a viable odom message
+    g_odom_tf_phi = 0.0; // put in impossible value for heading; test this value to make sure we have received a viable odom message
     ROS_INFO("waiting for valid odomTf update...");
     while (g_odom_tf_phi > 500.0) {
         ros::Duration(0.5).sleep(); // sleep for half a second
@@ -187,7 +187,7 @@ void SteeringController::lin_steering_algorithm() {
     //std::cout<<odom_xy_vec_<<std::endl;
     // let's put these in a message to publish, for rqt_plot to display
     //steering_errs_.data.clear();
-    //steering_errs_.data.push_back(lateral_err);
+    //steering_errs_.data.push_baodomTfck(lateral_err);
     //steering_errs_.data.push_back(heading_err); 
     //steering_errs_.data.push_back(trip_dist_err);
 

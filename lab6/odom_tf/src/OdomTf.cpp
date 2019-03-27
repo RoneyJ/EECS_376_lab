@@ -71,7 +71,7 @@ OdomTf::OdomTf(ros::NodeHandle* nodehandle) : nh_(*nodehandle) { // constructor
     stfDriftyOdomWrtMap_.frame_id_ = "map"; // declare the respective frames
     stfDriftyOdomWrtMap_.child_frame_id_ = "drifty_odom"; 
 
-    odom_subscriber_ = nh_.subscribe("/drifty_odom", 1, &OdomTf::odomCallback, this); //subscribe to odom messages
+    odom_subscriber_ = nh_.subscribe("/odom", 1, &OdomTf::odomCallback, this); //subscribe to odom messages
 
     //wait for drifty odom publication:
     ROS_WARN("waiting for drifty_odom publication");
@@ -101,7 +101,7 @@ OdomTf::OdomTf(ros::NodeHandle* nodehandle) : nh_(*nodehandle) { // constructor
 
 void OdomTf::initializeSubscribers() {
     ROS_INFO("Initializing Subscribers");
-    odom_subscriber_ = nh_.subscribe("/drifty_odom", 1, &OdomTf::odomCallback, this); //subscribe to odom messages
+    odom_subscriber_ = nh_.subscribe("/odom", 1, &OdomTf::odomCallback, this); //subscribe to odom messages
     amcl_subscriber_ = nh_.subscribe("/amcl_pose", 1, &OdomTf::amclCallback, this); //subscribe to odom messages
 
     // add more subscribers here, as needed

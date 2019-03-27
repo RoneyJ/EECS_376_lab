@@ -50,9 +50,9 @@ int main(int argc, char **argv) {
  
 
     float start = 0.0;
-    float end = 12.5; //32.0;
+    float end = 15.0; //32.0;
 
-    for(double i = start; i <= end; i+=0.5){
+    for(double i = start; i <= end; i+=1.0){
 	    ROS_INFO("iteration %f", i);
 	    lidar_alarm_set.data = lidar_alarm;
 	    pub.publish(lidar_alarm_set);
@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
     //pose.orientation = quat;
     //path_srv.request.path.poses.push_back(pose_stamped);
 
-    for(double i = end - 0.5; i >= start; i-=0.5){
+    for(double i = end - 1.0; i >= start; i-=1.0){
 	    ROS_INFO("iteration %f", i);
 	    lidar_alarm_set.data = lidar_alarm;
 	    pub.publish(lidar_alarm_set);
